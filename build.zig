@@ -144,6 +144,11 @@ fn buildExamples(
         addExample("01_hello_world", "server", b, lib, mod, step);
         addExample("01_hello_world", "client", b, lib, mod, step);
     }
+
+    {
+        addExample("02_weather", "server", b, lib, mod, step);
+        addExample("02_weather", "client", b, lib, mod, step);
+    }
 }
 
 fn addExample(
