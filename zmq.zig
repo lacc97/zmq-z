@@ -10,7 +10,7 @@ pub const Context = struct {
         return .{ .raw = raw };
     }
     pub fn deinit(ctx: Context) void {
-        _ = c.zmq_ctx_destroy(ctx.raw);
+        _ = c.zmq_ctx_term(ctx.raw);
     }
 
     pub fn open(ctx: Context, typ: Socket.Type) !Socket {
