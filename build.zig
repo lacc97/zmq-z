@@ -149,6 +149,12 @@ fn buildExamples(
         addExample("02_weather", "server", b, lib, mod, step);
         addExample("02_weather", "client", b, lib, mod, step);
     }
+
+    {
+        addExample("03_pipeline", "ventilator", b, lib, mod, step);
+        addExample("03_pipeline", "worker", b, lib, mod, step);
+        addExample("03_pipeline", "sink", b, lib, mod, step);
+    }
 }
 
 fn addExample(
