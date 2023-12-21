@@ -23,9 +23,9 @@ pub const Socket = struct {
     raw: *anyopaque,
 
     pub const SendFlags = packed struct(c_uint) {
-        __1: u1 = 0,
+        dont_wait: bool = false,
         snd_more: bool = false,
-        __2: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 2) = 0,
+        __1: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 2) = 0,
     };
 
     pub const RecvFlags = packed struct(c_uint) {
