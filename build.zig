@@ -21,6 +21,10 @@ pub fn build(b: *std.Build) void {
         .source_dir = zeromq_dep.path("include"),
     });
     b.installArtifact(lib);
+
+    const mod = b.addModule("zmq", .{ .source_file = .{ .path = "zmq.zig" } });
+
+    buildExamples(b, lib, mod);
 }
 
 fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.Step.Compile) void {
@@ -73,6 +77,11 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
     const have_o_cloexec = (target.os.tag == .linux);
     const have_sock_cloexec = (target.os.tag == .linux);
 
+    const have_pthread_setname_1 = false;
+    const have_pthread_setname_2 = (target.os.tag == .linux);
+    const have_pthread_setname_3 = false;
+    const have_pthread_set_affinity = (target.os.tag == .linux);
+
     const have_strnlen = true;
 
     const platform_hpp = b.addConfigHeader(.{
@@ -109,10 +118,43 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
         .ZMQ_HAVE_O_CLOEXEC = defineIf(have_o_cloexec),
         .ZMQ_HAVE_SOCK_CLOEXEC = defineIf(have_sock_cloexec),
 
+        .ZMQ_HAVE_PTHREAD_SETNAME_1 = defineIf(have_pthread_setname_1),
+        .ZMQ_HAVE_PTHREAD_SETNAME_2 = defineIf(have_pthread_setname_2),
+        .ZMQ_HAVE_PTHREAD_SETNAME_3 = defineIf(have_pthread_setname_3),
+        .ZMQ_HAVE_PTHREAD_SET_AFFINITY = defineIf(have_pthread_set_affinity),
+
         .HAVE_POSIX_MEMALIGN = defineOne(target.os.tag != .windows),
         .HAVE_STRNLEN = defineIf(have_strnlen),
     });
     lib.addConfigHeader(platform_hpp);
+}
+
+fn buildExamples(b: *std.Build, lib: *std.Build.Step.Compile, mod: *std.Build.Module) void {
+    const step = b.step("examples", "Build and install examples");
+
+    {
+        const server_exe = b.addExecutable(.{
+            .name = "01_hello_world",
+            .root_source_file = .{ .path = "examples/01_hello_world/server.zig" },
+            .target = lib.target,
+            .optimize = lib.optimize,
+        });
+        server_exe.addModule("zmq", mod);
+        server_exe.linkLibrary(lib);
+
+        step.dependOn(&b.addInstallArtifact(server_exe, .{ .dest_sub_path = "01_hello_world/server" }).step);
+
+        const client_exe = b.addExecutable(.{
+            .name = "01_hello_world",
+            .root_source_file = .{ .path = "examples/01_hello_world/client.zig" },
+            .target = lib.target,
+            .optimize = lib.optimize,
+        });
+        client_exe.addModule("zmq", mod);
+        client_exe.linkLibrary(lib);
+
+        step.dependOn(&b.addInstallArtifact(client_exe, .{ .dest_sub_path = "01_hello_world/client" }).step);
+    }
 }
 
 const base_sources = [_][]const u8{
