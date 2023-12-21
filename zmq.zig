@@ -81,6 +81,14 @@ pub const Socket = struct {
     }
 };
 
+pub fn version() std.SemanticVersion {
+    var major: c_int = undefined;
+    var minor: c_int = undefined;
+    var patch: c_int = undefined;
+    c.zmq_version(&major, &minor, &patch);
+    return .{ .major = @intCast(major), .minor = @intCast(minor), .patch = @intCast(patch) };
+}
+
 fn OkOrErrno(comptime T: type) type {
     return ErrnoError!switch (@typeInfo(T)) {
         .Int => void,

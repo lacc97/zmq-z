@@ -129,32 +129,53 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
     lib.addConfigHeader(platform_hpp);
 }
 
-fn buildExamples(b: *std.Build, lib: *std.Build.Step.Compile, mod: *std.Build.Module) void {
+fn buildExamples(
+    b: *std.Build,
+    lib: *std.Build.Step.Compile,
+    mod: *std.Build.Module,
+) void {
     const step = b.step("examples", "Build and install examples");
 
     {
-        const server_exe = b.addExecutable(.{
-            .name = "01_hello_world",
-            .root_source_file = .{ .path = "examples/01_hello_world/server.zig" },
-            .target = lib.target,
-            .optimize = lib.optimize,
-        });
-        server_exe.addModule("zmq", mod);
-        server_exe.linkLibrary(lib);
-
-        step.dependOn(&b.addInstallArtifact(server_exe, .{ .dest_sub_path = "01_hello_world/server" }).step);
-
-        const client_exe = b.addExecutable(.{
-            .name = "01_hello_world",
-            .root_source_file = .{ .path = "examples/01_hello_world/client.zig" },
-            .target = lib.target,
-            .optimize = lib.optimize,
-        });
-        client_exe.addModule("zmq", mod);
-        client_exe.linkLibrary(lib);
-
-        step.dependOn(&b.addInstallArtifact(client_exe, .{ .dest_sub_path = "01_hello_world/client" }).step);
+        addExample("00_version", "main", b, lib, mod, step);
     }
+
+    {
+        addExample("01_hello_world", "server", b, lib, mod, step);
+        addExample("01_hello_world", "client", b, lib, mod, step);
+    }
+}
+
+fn addExample(
+    example_name: []const u8,
+    exe_name: []const u8,
+    b: *std.Build,
+    lib: *std.Build.Step.Compile,
+    mod: *std.Build.Module,
+    step: *std.Build.Step,
+) void {
+    const exe = b.addExecutable(.{
+        .name = std.fmt.allocPrint(
+            b.allocator,
+            "{s}_{s}",
+            .{ example_name, exe_name },
+        ) catch @panic("OOM"),
+        .root_source_file = .{ .path = std.fmt.allocPrint(
+            b.allocator,
+            "examples/{s}/{s}.zig",
+            .{ example_name, exe_name },
+        ) catch @panic("OOM") },
+        .target = lib.target,
+        .optimize = lib.optimize,
+    });
+    exe.addModule("zmq", mod);
+    exe.linkLibrary(lib);
+
+    step.dependOn(&b.addInstallArtifact(exe, .{ .dest_sub_path = std.fmt.allocPrint(
+        b.allocator,
+        "{s}/{s}",
+        .{ example_name, exe_name },
+    ) catch @panic("OOM") }).step);
 }
 
 const base_sources = [_][]const u8{
