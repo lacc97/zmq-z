@@ -6,14 +6,19 @@ pub fn build(b: *std.Build) void {
 
     const zeromq_dep = b.dependency("zeromq", .{});
 
-    const lib = b.addStaticLibrary(.{
+    const build_static = b.option(bool, "static", "Build zeromq as a static object") orelse false;
+
+    const lib = std.Build.Step.Compile.create(b, .{
         .name = "zmq",
+        .kind = .lib,
+        .linkage = if (build_static) .static else .dynamic,
         .target = target,
         .optimize = optimize,
     });
     configurePlatform(b, zeromq_dep, lib);
     lib.addIncludePath(zeromq_dep.path("src"));
-    lib.addCSourceFiles(.{ .dependency = zeromq_dep, .files = &base_sources, .flags = &.{} });
+    if (!build_static) lib.defineCMacro("DLL_EXPORT", null);
+    lib.addCSourceFiles(.{ .dependency = zeromq_dep, .files = &base_sources, .flags = &.{"-fvisibility=hidden"} });
     lib.linkLibCpp();
     lib.installHeadersDirectoryOptions(.{
         .install_dir = .header,
