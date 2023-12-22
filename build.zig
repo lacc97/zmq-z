@@ -160,6 +160,10 @@ fn buildExamples(
         addExample("03_pipeline", "worker", b, lib, mod, step);
         addExample("03_pipeline", "sink", b, lib, mod, step);
     }
+
+    {
+        addExample("04_iothreads", "main", b, lib, mod, step);
+    }
 }
 
 fn addExample(

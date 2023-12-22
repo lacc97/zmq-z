@@ -1,9 +1,34 @@
 const std = @import("std");
+const assert = std.debug.assert;
 
 const c = @cImport(@cInclude("zmq.h"));
 
 pub const Context = struct {
     raw: *anyopaque,
+
+    pub const GetOption = enum(c_int) {
+        io_threads = c.ZMQ_IO_THREADS,
+        max_sockets = c.ZMQ_MAX_SOCKETS,
+        socket_limit = c.ZMQ_SOCKET_LIMIT,
+        thread_sched_policy = c.ZMQ_THREAD_SCHED_POLICY,
+        max_msgsz = c.ZMQ_MAX_MSGSZ,
+        msg_t_size = c.ZMQ_MSG_T_SIZE,
+        thread_affinity_cpu_add = c.ZMQ_THREAD_AFFINITY_CPU_ADD,
+        thread_affinity_cpu_remove = c.ZMQ_THREAD_AFFINITY_CPU_REMOVE,
+        thread_name_prefix = c.ZMQ_THREAD_NAME_PREFIX,
+    };
+
+    pub const SetOption = enum(c_int) {
+        io_threads = c.ZMQ_IO_THREADS,
+        max_sockets = c.ZMQ_MAX_SOCKETS,
+        thread_priority = c.ZMQ_THREAD_PRIORITY,
+        thread_sched_policy = c.ZMQ_THREAD_SCHED_POLICY,
+        max_msgsz = c.ZMQ_MAX_MSGSZ,
+        msg_t_size = c.ZMQ_MSG_T_SIZE,
+        thread_affinity_cpu_add = c.ZMQ_THREAD_AFFINITY_CPU_ADD,
+        thread_affinity_cpu_remove = c.ZMQ_THREAD_AFFINITY_CPU_REMOVE,
+        thread_name_prefix = c.ZMQ_THREAD_NAME_PREFIX,
+    };
 
     pub fn init() !Context {
         const raw = try okOrErrno(c.zmq_ctx_new());
@@ -11,6 +36,39 @@ pub const Context = struct {
     }
     pub fn deinit(ctx: Context) void {
         _ = c.zmq_ctx_term(ctx.raw);
+    }
+
+    pub fn getExt(ctx: Context, option: GetOption, buf: []u8) ![]u8 {
+        // TODO: use zmq_ctx_get_ext() once it is available
+
+        const value_len = @sizeOf(c_int);
+        if (buf.len < value_len) return error.TooSmallBuffer;
+
+        const value_ptr = std.mem.bytesAsValue(c_int, buf[0..value_len]);
+        const value = c.zmq_ctx_get(ctx.raw, @intFromEnum(option));
+        try okOrErrno(value);
+        value_ptr.* = value;
+        return buf[0..value_len];
+    }
+
+    pub fn get(ctx: Context, option: GetOption) !c_int {
+        var value: c_int = undefined;
+        _ = try ctx.getExt(option, std.mem.asBytes(&value));
+        return value;
+    }
+
+    pub fn setExt(ctx: Context, option: SetOption, value_buf: []const u8) !void {
+        // TODO: use zmq_ctx_set_ext() once it is available
+
+        const value_len = @sizeOf(c_int);
+        if (value_buf.len != value_len) return error.WrongSizeBuffer;
+
+        const value = std.mem.bytesToValue(c_int, value_buf[0..value_len]);
+        try okOrErrno(c.zmq_ctx_set(ctx.raw, @intFromEnum(option), value));
+    }
+
+    pub fn set(ctx: Context, option: SetOption, value: c_int) !void {
+        try ctx.setExt(option, std.mem.asBytes(&value));
     }
 
     pub fn open(ctx: Context, typ: Socket.Type) !Socket {
@@ -129,6 +187,12 @@ pub const Socket = struct {
 
     pub fn close(sock: Socket) void {
         _ = c.zmq_close(sock.raw);
+    }
+
+    pub fn getOpt(sock: Socket, opt: Option, buf: []u8) ![]u8 {
+        var buflen: usize = buf.len;
+        try okOrErrno(c.zmq_getsockopt(sock, @intFromEnum(opt), @ptrCast(buf.ptr), &buflen));
+        return buf[0..buflen];
     }
 
     pub fn setOpt(sock: Socket, opt: Option, value: []const u8) !void {
