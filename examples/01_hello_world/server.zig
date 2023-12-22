@@ -3,7 +3,7 @@ const std = @import("std");
 const zmq = @import("zmq");
 
 pub const std_options = struct {
-    pub const log_level = .info;
+    pub usingnamespace @import("log_options");
 };
 
 const info = std.log.info;

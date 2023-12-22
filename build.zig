@@ -141,34 +141,36 @@ fn buildExamples(
 ) void {
     const step = b.step("examples", "Build and install examples");
 
+    const log_options = b.createModule(.{ .source_file = .{ .path = "examples/log.zig" } });
+
     {
-        addExample("00_version", "main", b, lib, mod, step);
+        addExample("00_version", "main", b, lib, mod, log_options, step);
     }
 
     {
-        addExample("01_hello_world", "server", b, lib, mod, step);
-        addExample("01_hello_world", "client", b, lib, mod, step);
+        addExample("01_hello_world", "server", b, lib, mod, log_options, step);
+        addExample("01_hello_world", "client", b, lib, mod, log_options, step);
     }
 
     {
-        addExample("02_weather", "server", b, lib, mod, step);
-        addExample("02_weather", "client", b, lib, mod, step);
+        addExample("02_weather", "server", b, lib, mod, log_options, step);
+        addExample("02_weather", "client", b, lib, mod, log_options, step);
     }
 
     {
-        addExample("03_pipeline", "ventilator", b, lib, mod, step);
-        addExample("03_pipeline", "worker", b, lib, mod, step);
-        addExample("03_pipeline", "sink", b, lib, mod, step);
+        addExample("03_pipeline", "ventilator", b, lib, mod, log_options, step);
+        addExample("03_pipeline", "worker", b, lib, mod, log_options, step);
+        addExample("03_pipeline", "sink", b, lib, mod, log_options, step);
     }
 
     {
-        addExample("04_iothreads", "main", b, lib, mod, step);
+        addExample("04_iothreads", "main", b, lib, mod, log_options, step);
     }
 
     {
-        addExample("05_extended_rr", "broker", b, lib, mod, step);
-        addExample("05_extended_rr", "client", b, lib, mod, step);
-        addExample("05_extended_rr", "worker", b, lib, mod, step);
+        addExample("05_extended_rr", "broker", b, lib, mod, log_options, step);
+        addExample("05_extended_rr", "client", b, lib, mod, log_options, step);
+        addExample("05_extended_rr", "worker", b, lib, mod, log_options, step);
     }
 }
 
@@ -178,6 +180,7 @@ fn addExample(
     b: *std.Build,
     lib: *std.Build.Step.Compile,
     mod: *std.Build.Module,
+    log_options: *std.Build.Module,
     step: *std.Build.Step,
 ) void {
     const exe = b.addExecutable(.{
@@ -195,6 +198,7 @@ fn addExample(
         .optimize = lib.optimize,
     });
     exe.addModule("zmq", mod);
+    exe.addModule("log_options", log_options);
     exe.linkLibrary(lib);
 
     step.dependOn(&b.addInstallArtifact(exe, .{ .dest_sub_path = std.fmt.allocPrint(
