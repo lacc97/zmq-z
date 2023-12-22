@@ -276,6 +276,10 @@ pub fn poll(items: []PollItem, timeout: c_long) !c_ulong {
     return @intCast(count);
 }
 
+pub fn proxy(frontend: Socket, backend: Socket, capture: ?Socket) !void {
+    try okOrErrno(c.zmq_proxy(frontend.raw, backend.raw, if (capture) |sock| sock.raw else null));
+}
+
 pub fn version() std.SemanticVersion {
     var major: c_int = undefined;
     var minor: c_int = undefined;

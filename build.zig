@@ -169,6 +169,7 @@ fn buildExamples(
 
     {
         addExample("05_extended_rr", "broker", b, lib, mod, log_options, step);
+        addExample("05_extended_rr", "broker_proxy", b, lib, mod, log_options, step);
         addExample("05_extended_rr", "client", b, lib, mod, log_options, step);
         addExample("05_extended_rr", "worker", b, lib, mod, log_options, step);
     }
