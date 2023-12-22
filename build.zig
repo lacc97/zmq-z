@@ -164,6 +164,12 @@ fn buildExamples(
     {
         addExample("04_iothreads", "main", b, lib, mod, step);
     }
+
+    {
+        addExample("05_extended_rr", "broker", b, lib, mod, step);
+        addExample("05_extended_rr", "client", b, lib, mod, step);
+        addExample("05_extended_rr", "worker", b, lib, mod, step);
+    }
 }
 
 fn addExample(

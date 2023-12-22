@@ -3,7 +3,7 @@ const assert = std.debug.assert;
 
 const c = @cImport(@cInclude("zmq.h"));
 
-pub const Context = struct {
+pub const Context = extern struct {
     raw: *anyopaque,
 
     pub const GetOption = enum(c_int) {
@@ -77,7 +77,7 @@ pub const Context = struct {
     }
 };
 
-pub const Socket = struct {
+pub const Socket = extern struct {
     raw: *anyopaque,
 
     pub const SendFlags = packed struct(c_uint) {
@@ -227,6 +227,54 @@ pub const Socket = struct {
         return buf[0..@intCast(len)];
     }
 };
+
+pub const Message = extern struct {
+    inner: c.zmq_msg_t,
+
+    pub fn init(msg: *Message) void {
+        // This function always returns zero.
+        _ = c.zmq_msg_init(&msg.inner);
+    }
+
+    pub fn close(msg: *Message) void {
+        // This function may fail with EFAULT on invalid message but this still counts as closed.
+        _ = c.zmq_msg_close(&msg.inner);
+    }
+
+    pub fn hasMore(msg: *Message) bool {
+        return c.zmq_msg_more(&msg.inner) != 0;
+    }
+
+    pub fn recv(msg: *Message, socket: Socket, flags: Socket.RecvFlags) !void {
+        try okOrErrno(c.zmq_msg_recv(&msg.inner, socket.raw, @bitCast(flags)));
+    }
+
+    pub fn send(msg: *Message, socket: Socket, flags: Socket.SendFlags) !void {
+        try okOrErrno(c.zmq_msg_send(&msg.inner, socket.raw, @bitCast(flags)));
+    }
+};
+
+pub const PollItem = extern struct {
+    socket: ?*anyopaque = null,
+    fd: std.os.fd_t = 0,
+    events: Flags = .{},
+    revents: Flags = undefined,
+
+    pub const Flags = packed struct(c_ushort) {
+        in: bool = false,
+        out: bool = false,
+        err: bool = false,
+        pri: bool = false,
+
+        __1: std.meta.Int(.unsigned, @bitSizeOf(c_ushort) - 4) = 0,
+    };
+};
+
+pub fn poll(items: []PollItem, timeout: c_long) !c_ulong {
+    const count = c.zmq_poll(@ptrCast(items.ptr), @intCast(items.len), timeout);
+    try okOrErrno(count);
+    return @intCast(count);
+}
 
 pub fn version() std.SemanticVersion {
     var major: c_int = undefined;
