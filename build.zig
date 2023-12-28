@@ -173,6 +173,12 @@ fn buildExamples(
         addExample("05_extended_rr", "client", b, lib, mod, log_options, step);
         addExample("05_extended_rr", "worker", b, lib, mod, log_options, step);
     }
+
+    {
+        addExample("06_pipeline_kill", "ventilator", b, lib, mod, log_options, step);
+        addExample("06_pipeline_kill", "worker", b, lib, mod, log_options, step);
+        addExample("06_pipeline_kill", "sink", b, lib, mod, log_options, step);
+    }
 }
 
 fn addExample(
