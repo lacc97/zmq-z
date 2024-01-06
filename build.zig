@@ -186,6 +186,11 @@ fn buildExamples(
         addExample("07_interrupt", "client", b, lib, mod, log_options, step);
         addExample("07_interrupt", "server", b, lib, mod, log_options, step);
     }
+
+    {
+        addExample("08_multithreading", "client", b, lib, mod, log_options, step);
+        addExample("08_multithreading", "server", b, lib, mod, log_options, step);
+    }
 }
 
 fn addExample(
