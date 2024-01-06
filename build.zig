@@ -139,6 +139,8 @@ fn buildExamples(
     lib: *std.Build.Step.Compile,
     mod: *std.Build.Module,
 ) void {
+    const t = lib.target.toTarget();
+
     const step = b.step("examples", "Build and install examples");
 
     const log_options = b.createModule(.{ .source_file = .{ .path = "examples/log.zig" } });
@@ -178,6 +180,11 @@ fn buildExamples(
         addExample("06_pipeline_kill", "ventilator", b, lib, mod, log_options, step);
         addExample("06_pipeline_kill", "worker", b, lib, mod, log_options, step);
         addExample("06_pipeline_kill", "sink", b, lib, mod, log_options, step);
+    }
+
+    if (t.os.tag == .linux) {
+        addExample("07_interrupt", "client", b, lib, mod, log_options, step);
+        addExample("07_interrupt", "server", b, lib, mod, log_options, step);
     }
 }
 

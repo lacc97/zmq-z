@@ -310,9 +310,12 @@ fn okOrErrno(ret: anytype) OkOrErrno(@TypeOf(ret)) {
     };
 }
 
-const ErrnoError = error{Unexpected};
+const ErrnoError = error{ Unexpected, Interrupted };
 
 fn errno() ErrnoError {
-    // TODO: other errors
-    return error.Unexpected;
+    const e = @as(std.c.E, @enumFromInt(std.c._errno().*));
+    return switch (e) {
+        .INTR => error.Interrupted,
+        else => error.Unexpected,
+    };
 }
