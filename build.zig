@@ -10,12 +10,14 @@ pub fn build(b: *std.Build) void {
 
     const lib = std.Build.Step.Compile.create(b, .{
         .name = "zmq",
+        .root_module = .{
+            .target = target,
+            .optimize = optimize,
+        },
         .kind = .lib,
         .linkage = if (build_static) .static else .dynamic,
-        .target = target,
-        .optimize = optimize,
     });
-    configurePlatform(b, zeromq_dep, lib);
+    configurePlatform(b, target, zeromq_dep, lib);
     lib.addIncludePath(zeromq_dep.path("src"));
     if (!build_static) lib.defineCMacro("DLL_EXPORT", null);
     lib.addCSourceFiles(.{ .dependency = zeromq_dep, .files = &base_sources, .flags = &.{"-fvisibility=hidden"} });
@@ -24,15 +26,22 @@ pub fn build(b: *std.Build) void {
         .install_dir = .header,
         .install_subdir = "",
         .source_dir = zeromq_dep.path("include"),
+        .exclude_extensions = &.{"zmq_utils.h"},
     });
     b.installArtifact(lib);
 
-    const mod = b.addModule("zmq", .{ .source_file = .{ .path = "zmq.zig" } });
+    const mod = b.addModule("zmq", .{ .root_source_file = .{ .path = "zmq.zig" } });
+    mod.linkLibrary(lib);
 
-    buildExamples(b, lib, mod);
+    buildExamples(b, target, optimize, lib, mod);
 }
 
-fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.Step.Compile) void {
+fn configurePlatform(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    dep: *std.Build.Dependency,
+    lib: *std.Build.Step.Compile,
+) void {
     const defineIf = struct {
         fn defineIf(cond: bool) ?void {
             return if (cond) {} else null;
@@ -47,9 +56,9 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
     const CV = enum { none, stl, win32, pthreads };
     const Poller = enum { none, select, poll, pollset, devpoll, epoll, kqueue };
 
-    const target = lib.target.toTarget();
+    const t = target.result;
 
-    const cacheline_size: isize = switch (target.cpu.arch) {
+    const cacheline_size: isize = switch (t.cpu.arch) {
         // Stolen from straight from std.atomic.cache_line logic.
 
         .x86_64, .aarch64, .powerpc64 => 128,
@@ -58,36 +67,37 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
         else => 64,
     };
 
-    const cv_impl: CV = switch (target.os.tag) {
+    const cv_impl: CV = switch (t.os.tag) {
         .windows => .win32,
         .linux => .pthreads, // TODO: other pthread
         else => .stl,
     };
-    const poller_impl: Poller = if (target.os.tag.isDarwin())
+    const poller_impl: Poller = if (t.os.tag.isDarwin())
         .kqueue
-    else if (target.os.tag.isBSD())
+    else if (t.os.tag.isBSD())
         .poll
-    else switch (target.os.tag) {
+    else switch (t.os.tag) {
         .linux => .epoll,
         else => .select,
     };
 
     const have_ipc = true;
-    const have_sockaddr_un = (target.os.tag != .windows);
+    const have_sockaddr_un = (t.os.tag != .windows);
 
-    const have_eventfd = (target.os.tag == .linux);
-    const have_uio = (target.os.tag == .linux);
-    const have_ifaddrs = (target.os.tag == .linux);
+    const have_eventfd = (t.os.tag == .linux);
+    const have_uio = (t.os.tag == .linux);
+    const have_ifaddrs = (t.os.tag == .linux);
 
-    const have_o_cloexec = (target.os.tag == .linux);
-    const have_sock_cloexec = (target.os.tag == .linux);
+    const have_o_cloexec = (t.os.tag == .linux);
+    const have_sock_cloexec = (t.os.tag == .linux);
 
     const have_pthread_setname_1 = false;
-    const have_pthread_setname_2 = (target.os.tag == .linux);
+    const have_pthread_setname_2 = (t.os.tag == .linux);
     const have_pthread_setname_3 = false;
-    const have_pthread_set_affinity = (target.os.tag == .linux);
+    const have_pthread_set_affinity = (t.os.tag == .linux);
 
     const have_strnlen = true;
+    const have_strlcpy = true;
 
     const platform_hpp = b.addConfigHeader(.{
         .style = .{ .cmake = dep.path("builds/cmake/platform.hpp.in") },
@@ -111,7 +121,7 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
 
         .ZMQ_CACHELINE_SIZE = cacheline_size,
 
-        .ZMQ_HAVE_WINDOWS = defineIf(target.os.tag == .windows),
+        .ZMQ_HAVE_WINDOWS = defineIf(t.os.tag == .windows),
 
         .ZMQ_HAVE_IPC = defineIf(have_ipc),
         .ZMQ_HAVE_SOCKADDR_UN = defineIf(have_sockaddr_un),
@@ -128,7 +138,9 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
         .ZMQ_HAVE_PTHREAD_SETNAME_3 = defineIf(have_pthread_setname_3),
         .ZMQ_HAVE_PTHREAD_SET_AFFINITY = defineIf(have_pthread_set_affinity),
 
-        .HAVE_POSIX_MEMALIGN = defineOne(target.os.tag != .windows),
+        .ZMQ_HAVE_STRLCPY = defineIf(have_strlcpy),
+
+        .HAVE_POSIX_MEMALIGN = defineOne(t.os.tag != .windows),
         .HAVE_STRNLEN = defineIf(have_strnlen),
     });
     lib.addConfigHeader(platform_hpp);
@@ -136,60 +148,63 @@ fn configurePlatform(b: *std.Build, dep: *std.Build.Dependency, lib: *std.Build.
 
 fn buildExamples(
     b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
     lib: *std.Build.Step.Compile,
     mod: *std.Build.Module,
 ) void {
-    const t = lib.target.toTarget();
+    _ = lib;
+    const t = target.result;
 
     const step = b.step("examples", "Build and install examples");
 
-    const log_options = b.createModule(.{ .source_file = .{ .path = "examples/log.zig" } });
+    const log_options = b.createModule(.{ .root_source_file = .{ .path = "examples/log.zig" } });
 
     {
-        addExample("00_version", "main", b, lib, mod, log_options, step);
+        addExample("00_version", "main", b, target, optimize, mod, log_options, step);
     }
 
     {
-        addExample("01_hello_world", "server", b, lib, mod, log_options, step);
-        addExample("01_hello_world", "client", b, lib, mod, log_options, step);
+        addExample("01_hello_world", "server", b, target, optimize, mod, log_options, step);
+        addExample("01_hello_world", "client", b, target, optimize, mod, log_options, step);
     }
 
     {
-        addExample("02_weather", "server", b, lib, mod, log_options, step);
-        addExample("02_weather", "client", b, lib, mod, log_options, step);
+        addExample("02_weather", "server", b, target, optimize, mod, log_options, step);
+        addExample("02_weather", "client", b, target, optimize, mod, log_options, step);
     }
 
     {
-        addExample("03_pipeline", "ventilator", b, lib, mod, log_options, step);
-        addExample("03_pipeline", "worker", b, lib, mod, log_options, step);
-        addExample("03_pipeline", "sink", b, lib, mod, log_options, step);
+        addExample("03_pipeline", "ventilator", b, target, optimize, mod, log_options, step);
+        addExample("03_pipeline", "worker", b, target, optimize, mod, log_options, step);
+        addExample("03_pipeline", "sink", b, target, optimize, mod, log_options, step);
     }
 
     {
-        addExample("04_iothreads", "main", b, lib, mod, log_options, step);
+        addExample("04_iothreads", "main", b, target, optimize, mod, log_options, step);
     }
 
     {
-        addExample("05_extended_rr", "broker", b, lib, mod, log_options, step);
-        addExample("05_extended_rr", "broker_proxy", b, lib, mod, log_options, step);
-        addExample("05_extended_rr", "client", b, lib, mod, log_options, step);
-        addExample("05_extended_rr", "worker", b, lib, mod, log_options, step);
+        addExample("05_extended_rr", "broker", b, target, optimize, mod, log_options, step);
+        addExample("05_extended_rr", "broker_proxy", b, target, optimize, mod, log_options, step);
+        addExample("05_extended_rr", "client", b, target, optimize, mod, log_options, step);
+        addExample("05_extended_rr", "worker", b, target, optimize, mod, log_options, step);
     }
 
     {
-        addExample("06_pipeline_kill", "ventilator", b, lib, mod, log_options, step);
-        addExample("06_pipeline_kill", "worker", b, lib, mod, log_options, step);
-        addExample("06_pipeline_kill", "sink", b, lib, mod, log_options, step);
+        addExample("06_pipeline_kill", "ventilator", b, target, optimize, mod, log_options, step);
+        addExample("06_pipeline_kill", "worker", b, target, optimize, mod, log_options, step);
+        addExample("06_pipeline_kill", "sink", b, target, optimize, mod, log_options, step);
     }
 
     if (t.os.tag == .linux) {
-        addExample("07_interrupt", "client", b, lib, mod, log_options, step);
-        addExample("07_interrupt", "server", b, lib, mod, log_options, step);
+        addExample("07_interrupt", "client", b, target, optimize, mod, log_options, step);
+        addExample("07_interrupt", "server", b, target, optimize, mod, log_options, step);
     }
 
     {
-        addExample("08_multithreading", "client", b, lib, mod, log_options, step);
-        addExample("08_multithreading", "server", b, lib, mod, log_options, step);
+        addExample("08_multithreading", "client", b, target, optimize, mod, log_options, step);
+        addExample("08_multithreading", "server", b, target, optimize, mod, log_options, step);
     }
 }
 
@@ -197,7 +212,8 @@ fn addExample(
     example_name: []const u8,
     exe_name: []const u8,
     b: *std.Build,
-    lib: *std.Build.Step.Compile,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
     mod: *std.Build.Module,
     log_options: *std.Build.Module,
     step: *std.Build.Step,
@@ -213,12 +229,11 @@ fn addExample(
             "examples/{s}/{s}.zig",
             .{ example_name, exe_name },
         ) catch @panic("OOM") },
-        .target = lib.target,
-        .optimize = lib.optimize,
+        .target = target,
+        .optimize = optimize,
     });
-    exe.addModule("zmq", mod);
-    exe.addModule("log_options", log_options);
-    exe.linkLibrary(lib);
+    exe.root_module.addImport("zmq", mod);
+    exe.root_module.addImport("log_options", log_options);
 
     step.dependOn(&b.addInstallArtifact(exe, .{ .dest_sub_path = std.fmt.allocPrint(
         b.allocator,
